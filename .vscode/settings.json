@@ -1,4 +1,7 @@
 {
     "editor.suggest.showIcons": false,
-    "editor.minimap.autohide": false
+    "editor.minimap.autohide": false,
+    "files.exclude": {
+        "**/.git": false
+    }
 }
