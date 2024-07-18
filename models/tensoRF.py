@@ -146,7 +146,7 @@ class TensorVM(TensorBase):
         self.compute_stepSize(res_target)
         print(f'upsamping to {res_target}')
 
-# 1
+
 class TensorVMSplit(TensorBase):
     def __init__(self, aabb, gridSize, device, **kargs):
         super(TensorVMSplit, self).__init__(aabb, gridSize, device, **kargs)
