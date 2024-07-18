@@ -157,6 +157,9 @@ class TensorVMSplit(TensorBase):
         self.basis_mat = torch.nn.Linear(sum(self.app_n_comp), self.app_dim, bias=False).to(
             device)  #linear全连接层,输入484848,输出27,[n,27]进mlp,得到颜色
 
+        # 修改 1
+        self.convolved_density_plane = None  # 添加新的属性来保存卷积后的结果
+
     def init_one_svd(self, n_component, gridSize, scale, device):
         plane_coef, line_coef = [], []
         for i in range(len(self.vecMode)):
@@ -216,22 +219,40 @@ class TensorVMSplit(TensorBase):
     def compute_densityfeature(self, xyz_sampled):
 
         # plane + line basis  matMode、vecMode用[0,1,2]表示vm分解中的平面和线
-        coordinate_plane = torch.stack((xyz_sampled[..., self.matMode[0]], xyz_sampled[..., self.matMode[1]],
-                                        xyz_sampled[..., self.matMode[2]])).detach().view(3, -1, 1, 2)
-        coordinate_line = torch.stack(
-            (xyz_sampled[..., self.vecMode[0]], xyz_sampled[..., self.vecMode[1]], xyz_sampled[..., self.vecMode[2]]))
-        coordinate_line = torch.stack((torch.zeros_like(coordinate_line), coordinate_line), dim=-1).detach().view(3, -1,
+        coordinate_plane = torch.stack((
+            xyz_sampled[..., self.matMode[0]],
+            xyz_sampled[..., self.matMode[1]],
+            xyz_sampled[..., self.matMode[2]]
+        )).detach().view(3, -1, 1, 2)
+
+        coordinate_line = torch.stack((
+            xyz_sampled[..., self.vecMode[0]],
+            xyz_sampled[..., self.vecMode[1]],
+            xyz_sampled[..., self.vecMode[2]]))
+
+        coordinate_line = torch.stack((
+            torch.zeros_like(coordinate_line),
+            coordinate_line
+        ), dim=-1).detach().view(3, -1,
                                                                                                                   1, 2)
 
         sigma_feature = torch.zeros((xyz_sampled.shape[0],), device=xyz_sampled.device)  #创建sigma_feature,存储密度特征
         for idx_plane in range(len(self.density_plane)):
-            plane_coef_point = F.grid_sample(self.density_plane[idx_plane], coordinate_plane[[idx_plane]],
-                                             #在xy平面上的n个采样点，对某个点用其xy坐标通过二线性差值得到[1,16]的特征，n个采样点取得[n,16]特征
-                                             align_corners=True).view(-1, *xyz_sampled.shape[:1])  #取平面的[n,16]特征
-            line_coef_point = F.grid_sample(self.density_line[idx_plane], coordinate_line[[idx_plane]],
-                                            align_corners=True).view(-1, *xyz_sampled.shape[:1])  #取线的[n,16]特征
+            # 修改,对体素网格进行卷积
+            # density_plane_params = self.get_density_plane_params()
+
+            # 在xy平面上的n个采样点，对某个点用其xy坐标通过二线性差值得到[1,16]的特征，n个采样点取得[n,16]特征
+            plane_coef_point = F.grid_sample(
+                self.density_plane[idx_plane],
+                coordinate_plane[[idx_plane]],
+                align_corners=True).view(-1, *xyz_sampled.shape[:1])  # 取平面的[n,16]特征
+            line_coef_point = F.grid_sample(
+                self.density_line[idx_plane],
+                coordinate_line[[idx_plane]],
+                align_corners=True).view(-1, *xyz_sampled.shape[:1])  # 取线的[n,16]特征
+
             sigma_feature = sigma_feature + torch.sum(plane_coef_point * line_coef_point, dim=0)
-            #对采样点在平面和线的[1,16]特征一一相乘得到[1,16]的列表，取每项总和为特征值，n个采样点便有n个特征值sigma_feature
+            # 对采样点在平面和线的[1,16]特征一一相乘得到[1,16]的列表，取每项总和为特征值，n个采样点便有n个特征值sigma_feature
         return sigma_feature
 
     def compute_appfeature(self, xyz_sampled):
@@ -251,7 +272,7 @@ class TensorVMSplit(TensorBase):
             line_coef_point.append(F.grid_sample(self.app_line[idx_plane], coordinate_line[[idx_plane]],
                                                  align_corners=True).view(-1, *xyz_sampled.shape[:1]))
         plane_coef_point, line_coef_point = torch.cat(plane_coef_point), torch.cat(line_coef_point)
-        #对于3种坐标表示(见论文),每个都取出[n,48]的特征并concat到一起,成为[n,3*48]
+        # 对于3种坐标表示(见论文),每个都取出[n,48]的特征并concat到一起,成为[n,3*48]
         return self.basis_mat((plane_coef_point * line_coef_point).T)  #进全连接层
 
     @torch.no_grad()
