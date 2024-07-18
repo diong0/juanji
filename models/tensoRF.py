@@ -183,7 +183,7 @@ class TensorVMSplit(TensorBase):
         return grad_vars
 
     # 修改
-    """
+
     def extract_and_convolve_density_plane(self, kernel, device):
         
         # 提取 density_plane 的参数并进行卷积操作
@@ -206,7 +206,7 @@ class TensorVMSplit(TensorBase):
             convolved_lines.append(torch.nn.Parameter(convolved_line))
         return torch.nn.ParameterList(convolved_planes).to(device), torch.nn.ParameterList(convolved_lines).to(
             device)
-    """
+
     def vectorDiffs(self, vector_comps):
         total = 0
 
