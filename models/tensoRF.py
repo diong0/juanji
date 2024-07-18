@@ -157,7 +157,7 @@ class TensorVMSplit(TensorBase):
         self.basis_mat = torch.nn.Linear(sum(self.app_n_comp), self.app_dim, bias=False).to(
             device)  #linear全连接层,输入484848,输出27,[n,27]进mlp,得到颜色
 
-        # 修改
+        # 修改 1
         self.convolved_density_plane = None  # 添加新的属性来保存卷积后的结果
 
     def init_one_svd(self, n_component, gridSize, scale, device):
@@ -182,31 +182,6 @@ class TensorVMSplit(TensorBase):
             grad_vars += [{'params': self.renderModule.parameters(), 'lr': lr_init_network}]
         return grad_vars
 
-    # 修改
-    """
-    def extract_and_convolve_density_plane(self, kernel, device):
-        
-        提取 density_plane 的参数并进行卷积操作
-        :param kernel: 卷积核 (torch.Tensor)
-        :return: 卷积后的结果 (list of torch.Tensor)
-        
-        kernel_param = torch.randn((16, 16, 3, 3), device=device)
-        kernel_line = torch.randn((16, 16, 3, 1), device=device)
-        convolved_planes = []
-        convolved_lines = []
-        for param in self.density_plane:
-            # param 的 shape 为 (1, n_component, height, width)
-            # 进行卷积操作
-            convolved_param = F.conv2d(param, kernel_param, padding=1)
-            convolved_planes.append(torch.nn.Parameter(convolved_param))
-        for L in self.density_line:
-            # L 的 shape 为 (1, n_component, height, width)
-            # 进行卷积擦操作
-            convolved_line = F.conv2d(L, kernel_line, padding=1)
-            convolved_lines.append(torch.nn.Parameter(convolved_line))
-        return torch.nn.ParameterList(convolved_planes).to(device), torch.nn.ParameterList(convolved_lines).to(
-            device)
-    """
     def vectorDiffs(self, vector_comps):
         total = 0
 
@@ -241,13 +216,6 @@ class TensorVMSplit(TensorBase):
             total = total + reg(self.app_plane[idx]) * 1e-2  # + reg(self.app_line[idx]) * 1e-3
         return total
 
-    # def get_density_plane_params(self):
-    #     # 提取 density_plane 中的参数
-    #     density_plane_params = []
-    #     for param in self.density_plane:
-    #         density_plane_params.append(param.detach().cpu().numpy())
-    #     return density_plane_params
-
     def compute_densityfeature(self, xyz_sampled):
 
         # plane + line basis  matMode、vecMode用[0,1,2]表示vm分解中的平面和线
@@ -264,12 +232,11 @@ class TensorVMSplit(TensorBase):
 
         coordinate_line = torch.stack((
             torch.zeros_like(coordinate_line),
-            coordinate_line)
-            , dim=-1).detach().view(3, -1, 1, 2)
+            coordinate_line
+        ), dim=-1).detach().view(3, -1,
+                                                                                                                  1, 2)
 
-        sigma_feature = torch.zeros((xyz_sampled.shape[0],), device=xyz_sampled.device)
-        # 创建sigma_feature,存储密度特征
-
+        sigma_feature = torch.zeros((xyz_sampled.shape[0],), device=xyz_sampled.device)  #创建sigma_feature,存储密度特征
         for idx_plane in range(len(self.density_plane)):
             # 修改,对体素网格进行卷积
             # density_plane_params = self.get_density_plane_params()
@@ -279,7 +246,6 @@ class TensorVMSplit(TensorBase):
                 self.density_plane[idx_plane],
                 coordinate_plane[[idx_plane]],
                 align_corners=True).view(-1, *xyz_sampled.shape[:1])  # 取平面的[n,16]特征
-
             line_coef_point = F.grid_sample(
                 self.density_line[idx_plane],
                 coordinate_line[[idx_plane]],
@@ -292,39 +258,22 @@ class TensorVMSplit(TensorBase):
     def compute_appfeature(self, xyz_sampled):
 
         # plane + line basis
-        coordinate_plane = torch.stack((
-            xyz_sampled[..., self.matMode[0]],
-            xyz_sampled[..., self.matMode[1]],
-            xyz_sampled[..., self.matMode[2]]
-        )).detach().view(3, -1, 1, 2)
-
-        coordinate_line = torch.stack((
-            xyz_sampled[..., self.vecMode[0]],
-            xyz_sampled[..., self.vecMode[1]],
-            xyz_sampled[..., self.vecMode[2]]))
-
-        coordinate_line = torch.stack((
-            torch.zeros_like(coordinate_line),
-            coordinate_line),
-            dim=-1).detach().view(3, -1, 1, 2)
+        coordinate_plane = torch.stack((xyz_sampled[..., self.matMode[0]], xyz_sampled[..., self.matMode[1]],
+                                        xyz_sampled[..., self.matMode[2]])).detach().view(3, -1, 1, 2)
+        coordinate_line = torch.stack(
+            (xyz_sampled[..., self.vecMode[0]], xyz_sampled[..., self.vecMode[1]], xyz_sampled[..., self.vecMode[2]]))
+        coordinate_line = torch.stack((torch.zeros_like(coordinate_line), coordinate_line), dim=-1).detach().view(3, -1,
+                                                                                                                  1, 2)
 
         plane_coef_point, line_coef_point = [], []
         for idx_plane in range(len(self.app_plane)):
-            plane_coef_point.append(F.grid_sample(
-                self.app_plane[idx_plane],
-                coordinate_plane[[idx_plane]],
-                align_corners=True
-            ).view(-1, *xyz_sampled.shape[:1]))
-
-            line_coef_point.append(F.grid_sample(
-                self.app_line[idx_plane],
-                coordinate_line[[idx_plane]],
-                align_corners=True
-            ).view(-1, *xyz_sampled.shape[:1]))
-
+            plane_coef_point.append(F.grid_sample(self.app_plane[idx_plane], coordinate_plane[[idx_plane]],
+                                                  align_corners=True).view(-1, *xyz_sampled.shape[:1]))
+            line_coef_point.append(F.grid_sample(self.app_line[idx_plane], coordinate_line[[idx_plane]],
+                                                 align_corners=True).view(-1, *xyz_sampled.shape[:1]))
         plane_coef_point, line_coef_point = torch.cat(plane_coef_point), torch.cat(line_coef_point)
         # 对于3种坐标表示(见论文),每个都取出[n,48]的特征并concat到一起,成为[n,3*48]
-        return self.basis_mat((plane_coef_point * line_coef_point).T)  # 进全连接层
+        return self.basis_mat((plane_coef_point * line_coef_point).T)  #进全连接层
 
     @torch.no_grad()
     def up_sampling_VM(self, plane_coef, line_coef, res_target):
