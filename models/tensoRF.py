@@ -186,9 +186,9 @@ class TensorVMSplit(TensorBase):
     """
     def extract_and_convolve_density_plane(self, kernel, device):
         
-        提取 density_plane 的参数并进行卷积操作
-        :param kernel: 卷积核 (torch.Tensor)
-        :return: 卷积后的结果 (list of torch.Tensor)
+        # 提取 density_plane 的参数并进行卷积操作
+        # :param kernel: 卷积核 (torch.Tensor)
+        # :return: 卷积后的结果 (list of torch.Tensor)
         
         kernel_param = torch.randn((16, 16, 3, 3), device=device)
         kernel_line = torch.randn((16, 16, 3, 1), device=device)
