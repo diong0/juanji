@@ -154,8 +154,8 @@ class TensorVMSplit(TensorBase):
     def init_svd_volume(self, res, device):
         self.density_plane, self.density_line = self.init_one_svd(self.density_n_comp, self.gridSize, 0.1, device)
         self.app_plane, self.app_line = self.init_one_svd(self.app_n_comp, self.gridSize, 0.1, device)
-        self.basis_mat = torch.nn.Linear(sum(self.app_n_comp), self.app_dim, bias=False).to(
-            device)  #linear全连接层,输入484848,输出27,[n,27]进mlp,得到颜色
+        self.basis_mat = torch.nn.Linear(sum(self.app_n_comp), self.app_dim, bias=False).to(device)
+        # linear全连接层,输入484848,输出27,[n,27]进mlp,得到颜色
 
         # 修改
         self.convolved_density_plane = None  # 添加新的属性来保存卷积后的结果
@@ -324,7 +324,7 @@ class TensorVMSplit(TensorBase):
 
         plane_coef_point, line_coef_point = torch.cat(plane_coef_point), torch.cat(line_coef_point)
         # 对于3种坐标表示(见论文),每个都取出[n,48]的特征并concat到一起,成为[n,3*48]
-        return self.basis_mat((plane_coef_point * line_coef_point).T)  # 进全连接层
+        return self.basis_mat((plane_coef_point * line_coef_point).T)  #进全连接层
 
     @torch.no_grad()
     def up_sampling_VM(self, plane_coef, line_coef, res_target):
